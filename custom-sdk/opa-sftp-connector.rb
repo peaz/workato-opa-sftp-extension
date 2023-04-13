@@ -1,5 +1,5 @@
 {
-  title: 'On-Premises SFTP Connector',
+  title: 'On-Prem SFTP Connector',
   secure_tunnel: true,
 
   pick_lists: {
@@ -15,10 +15,12 @@
    
    fields: [
      { name: 'profileName', label: 'profile', hint: 'Please contact OPA admin', optional: false },
-     { name: 'remoteHost', label: 'SFTP Host', hint: 'SFTP Host', optional: false },
-     { name: 'remotePort', label: 'SFTP Port', hint: 'SFTP Port', default: "22", optional: false },
+     { name: 'remoteHost', label: 'SFTP Host', hint: 'SFTP Host', type: "integer", optional: false },
+     { name: 'remotePort', label: 'SFTP Port', hint: 'SFTP Port', type: "integer", default: "22", optional: false },
+     { name: 'sessionTimeout', label: 'Session Timeout', hint: 'Session Timeout in milliseconds', type: "integer", default: "500", optional: false },
+     { name: 'channelTimeout', label: 'Channel Timeout', hint: 'Channel Timeout in milliseconds', type: "integer", default: "2000", optional: false },
      { name: 'username', label: 'User Name', hint: 'SFTP User Name', optional: false },
-     { name: 'password', label: 'Password', ngIf: 'input.authtype == "pwd"', control_type: "password", sticky: true},
+     { name: 'password', label: 'Password', hint: 'SFTP Password', control_type: "password", optional: false},
      { name: 'knownHostFile', label: 'Known Host File Path', hint: '/users/<<userid>>/.ssh/known_hosts', optional: false}     
    ],
     authorization: { type: 'none'},
@@ -31,9 +33,13 @@
   test: ->(connection) {
    post("http://localhost/ext/#{connection['profileName']}/connect",
       remoteHost: connection['remoteHost'],
+      remotePort: connection['remotePort'],
+      sessionTimeout: connection['sessionTimeout'],
+      channelTimeout: connection['channelTimeout'],
       username: connection['username'],
       password: connection['password'],
       knownHostFile: connection['knownHostFile'],
+      
       ).headers('X-Workato-Connector': 'enforce').after_error_response(500) do |code, body, header, message|
       error("#{code}: #{body}")
    end

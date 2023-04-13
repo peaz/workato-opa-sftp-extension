@@ -37,9 +37,9 @@ public class SFTPExtension {
         String USERNAME = (String) body.get("username");
         String PASSWORD = (String) body.get("password");
         String KNOWN_HOSTS_PATH = (String) body.get("knownHostPath");
-        int REMOTE_PORT = (int) body.get("remotePort");
-        int SESSION_TIMEOUT = (int) body.get("sessionTimeout");
-        int CHANNEL_TIMEOUT = (int) body.get("channelTimeout");
+        int REMOTE_PORT = Integer.parseInt((String) body.get("remotePort"));
+        int SESSION_TIMEOUT = Integer.parseInt((String) body.get("sessionTimeout"));
+        int CHANNEL_TIMEOUT = Integer.parseInt((String) body.get("channelTimeout"));
         String errorMsg = "";
         
         Session jschSession = null;
