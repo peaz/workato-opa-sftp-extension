@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 import com.jcraft.jsch.*;
 import java.util.Properties;
@@ -57,8 +58,8 @@ public class SFTPExtension {
             channelSftp.exit();
             
         } catch (Exception e) {
-            errorMsg = e.toString();
-            e.printStackTrace();
+            errorMsg = e.getMessage();
+            e.printStackTrace();      
         }
         
         if (errorMsg.isEmpty()) {
@@ -119,7 +120,7 @@ public class SFTPExtension {
             channelSftp.exit();
             
         } catch (Exception e) {
-            errorMsg = e.toString();
+            errorMsg = e.getMessage();
             e.printStackTrace();
         }
         

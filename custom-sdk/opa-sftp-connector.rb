@@ -21,7 +21,7 @@
      { name: 'channelTimeout', label: 'Channel Timeout', hint: 'Channel Timeout in milliseconds', type: "integer", default: "2000", optional: false },
      { name: 'username', label: 'User Name', hint: 'SFTP User Name', optional: false },
      { name: 'password', label: 'Password', hint: 'SFTP Password', control_type: "password", optional: false},
-     { name: 'knownHostFile', label: 'Known Host File Path', hint: '/users/<<userid>>/.ssh/known_hosts', optional: false}     
+     { name: 'knownHostPath', label: 'Known Host File Path', hint: '/users/<<userid>>/.ssh/known_hosts', optional: false}     
    ],
     authorization: { type: 'none'},
     apply: ->() {
@@ -38,7 +38,7 @@
       channelTimeout: connection['channelTimeout'],
       username: connection['username'],
       password: connection['password'],
-      knownHostFile: connection['knownHostFile'],
+      knownHostPath: connection['knownHostPath'],
       
       ).headers('X-Workato-Connector': 'enforce').after_error_response(500) do |code, body, header, message|
       error("#{code}: #{body}")
