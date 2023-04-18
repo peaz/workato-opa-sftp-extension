@@ -10,23 +10,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.http.HttpStatus;
+// import org.springframework.web.multipart.MultipartFile;
+// import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.context.Lifecycle;
+// import org.springframework.http.HttpStatus;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.jcraft.jsch.*;
 
-import java.io.ByteArrayInputStream;
-import java.util.Collection;
+// import java.io.ByteArrayInputStream;
+// import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
+// import java.util.HashSet;
 import java.util.Map;
 
 @Controller
-public class SFTPExtension {
+public class SFTPExtension implements Lifecycle{
 
     private static final Logger LOG = LoggerFactory.getLogger(SFTPExtension.class);  
     private ChannelSftp _channelSftp;
@@ -42,7 +43,8 @@ public class SFTPExtension {
     private Session jschSession;
 
     @RequestMapping(path = "/connect", method = RequestMethod.POST)
-    public @ResponseBody Map<String, Object> connect(@RequestBody Map<String, Object> body) throws Exception {
+    @ResponseBody
+    public Map<String, Object> connect(@RequestBody Map<String, Object> body) throws Exception {
         
         Map<String, Object> responseData = new HashMap<String, Object>();
 
@@ -78,39 +80,14 @@ public class SFTPExtension {
     }
 
     @RequestMapping(path = "/uploadFileContent", method = (RequestMethod.POST))
-    public @ResponseBody Map<String, Object> uploadFileContent(@RequestParam Map<String, Object> body) throws Exception {        
-        Map<String, Object> responseData = new HashMap<String, Object>();
-
+    @ResponseBody
+    public Map<String, Object> uploadFileContent(@RequestParam Map<String, Object> body) throws Exception {        
+        
         String fileContent = (String) body.get("fileContent");
         String remotePath = (String) body.get("remotePath");
         String filename = (String) body.get("filename");
 
-        String errorMsg = "";
-        try {            
-            //create source byteArrayInputStream
-            //ByteArrayInputStream sourceContent = new ByteArrayInputStream(fileContent);
-            String sourceContent = fileContent;
-
-            // transfer file from local to remote server, always OVERWRITE mode
-            this._channelSftp.put(sourceContent, remotePath + "/" + filename, ChannelSftp.OVERWRITE);        
-            
-        } catch (Exception e) {
-            errorMsg = e.getMessage();
-            e.printStackTrace();            
-        }
-        
-        if (errorMsg.isEmpty()) {
-            String successMsg = "Completed file upload for file name " + filename + ". Current Connection status: " + this._channelSftp.isConnected();
-            responseData.put("status","success");
-            responseData.put("message",successMsg);
-            LOG.info(successMsg);
-        } else {
-            responseData.put("status","error");
-            responseData.put("message",errorMsg);
-            LOG.error(errorMsg);
-        }        
-        
-        return responseData;
+        return uploadFiletoSFTP(fileContent, remotePath, filename);
     }
 
     public void stop() {
@@ -127,7 +104,7 @@ public class SFTPExtension {
     }
     
     public void start() {
-    LOG.info("Starting SFTP Extension");
+        LOG.info("Starting SFTP Extension");
     }
 
     private ChannelSftp setupJsch(String remoteHost, String username, String password, String knownHostsPath, int remotePort, int sessionTimeout) throws Exception {
@@ -140,6 +117,35 @@ public class SFTPExtension {
         this.jschSession.connect(sessionTimeout);
         this.jschSession.sendKeepAliveMsg();
         return (ChannelSftp)this.jschSession.openChannel("sftp");
+      }
+
+      private Map<String, Object> uploadFiletoSFTP(String fileContent, String remotePath, String filename) throws Exception {
+        Map<String, Object> responseData = new HashMap<String, Object>();
+        String errorMsg = "";
+        try {            
+            //create source byteArrayInputStream
+            //ByteArrayInputStream sourceContent = new ByteArrayInputStream(fileContent);
+            String sourceContent = fileContent;
+
+            // transfer file from local to remote server, always OVERWRITE mode
+            this._channelSftp.put(sourceContent, remotePath + "/" + filename, ChannelSftp.OVERWRITE);
+            
+        } catch (Exception e) {
+            errorMsg = e.getMessage();
+            e.printStackTrace();            
+        }
+        
+        if (errorMsg.isEmpty()) {
+            String successMsg = "Completed file upload for file name " + filename + ". Current Connection status: " + this._channelSftp.isConnected();
+            responseData.put("status","success");
+            responseData.put("message",successMsg);
+            LOG.info(successMsg);
+        } else {
+            responseData.put("status","error");
+            responseData.put("message",errorMsg);
+            LOG.error(errorMsg);
+        }   
+        return responseData;
       }
 
 }

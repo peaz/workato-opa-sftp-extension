@@ -79,7 +79,7 @@
         params(version: "2015-12-15").
         request_format_multipart_form.
         payload(
-          file: input['fileContant'],
+          file: [input['fileContant'], 'text/plain'],
           filename: input['filename'],
           remotePath: input['remotePath']
         )
