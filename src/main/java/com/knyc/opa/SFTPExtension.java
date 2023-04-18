@@ -4,18 +4,20 @@
 
 package com.knyc.opa;
 
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.http.HttpStatus;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.jcraft.jsch.*;
-import java.util.Properties;
-
-import javax.inject.Inject;
 
 import java.io.ByteArrayInputStream;
 import java.util.Collection;
@@ -26,46 +28,48 @@ import java.util.Map;
 @Controller
 public class SFTPExtension {
 
-    @Inject
-    private Environment env;
+    private static final Logger LOG = LoggerFactory.getLogger(SFTPExtension.class);  
+    private ChannelSftp _channelSftp;
+    private String _remoteHost;
+    private String _username;
+    private String _password;
+    private String _knownHostsPath;
+    private int _remotePort;
+    private int _sessionTimeout;
+    private int _channelTimeout;
+
+    private JSch jsch;    
+    private Session jschSession;
 
     @RequestMapping(path = "/connect", method = RequestMethod.POST)
     public @ResponseBody Map<String, Object> connect(@RequestBody Map<String, Object> body) throws Exception {
         
         Map<String, Object> responseData = new HashMap<String, Object>();
 
-        String REMOTE_HOST = (String) body.get("remoteHost");
-        String USERNAME = (String) body.get("username");
-        String PASSWORD = (String) body.get("password");
-        String KNOWN_HOSTS_PATH = (String) body.get("knownHostPath");
-        int REMOTE_PORT = Integer.parseInt((String) body.get("remotePort"));
-        int SESSION_TIMEOUT = Integer.parseInt((String) body.get("sessionTimeout"));
-        int CHANNEL_TIMEOUT = Integer.parseInt((String) body.get("channelTimeout"));
+        this._remoteHost = (String) body.get("remoteHost");
+        this._username = (String) body.get("username");
+        this._password = (String) body.get("password");
+        this._knownHostsPath = (String) body.get("knownHostPath");
+        this._remotePort = Integer.parseInt((String) body.get("remotePort"));
+        this._sessionTimeout = Integer.parseInt((String) body.get("sessionTimeout"));
+        this._channelTimeout = Integer.parseInt((String) body.get("channelTimeout"));
         String errorMsg = "";
         
-        Session jschSession = null;
         try {
-            JSch jsch = new JSch();
-            jsch.setKnownHosts(KNOWN_HOSTS_PATH);
-            jschSession = jsch.getSession(USERNAME, REMOTE_HOST, REMOTE_PORT);
-            jschSession.setPassword(PASSWORD);
-
-            jschSession.connect(SESSION_TIMEOUT);
-            Channel sftp = jschSession.openChannel("sftp");
-            sftp.connect(CHANNEL_TIMEOUT);
-
-            ChannelSftp channelSftp = (ChannelSftp) sftp;
-            channelSftp.exit();
-            
+            this._channelSftp = setupJsch(this._remoteHost, this._username, this._password, this._knownHostsPath, this._remotePort, this._sessionTimeout);
+            this._channelSftp.connect(this._channelTimeout);
+            LOG.info("SFTP extension successfully connected to remote SFTP host [" + this._remoteHost + ":" + this._remotePort + "]");
         } catch (Exception e) {
             errorMsg = e.getMessage();
-            e.printStackTrace();      
+            e.printStackTrace();    
+            // throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage(), e);  
         }
         
         if (errorMsg.isEmpty()) {
+            String successMsg = "successfully connected to remote SFTP host [" + this._remoteHost + ":" + this._remotePort + "]"; 
             responseData.put("status","success");
-            responseData.put("message","successfully connected to remote SFTP host");
-        } else {
+            responseData.put("message",successMsg);
+        } else {            
             responseData.put("status","error");
             responseData.put("message",errorMsg);
         }        
@@ -73,66 +77,69 @@ public class SFTPExtension {
         return responseData;
     }
 
-
-
-    @RequestMapping(path = "/uploadFileContent", method = RequestMethod.POST)
-    public @ResponseBody Map<String, Object> uploadFileContent(@RequestBody Map<String, Object> body) throws Exception {
-        
+    @RequestMapping(path = "/uploadFileContent", method = (RequestMethod.POST))
+    public @ResponseBody Map<String, Object> uploadFileContent(@RequestParam Map<String, Object> body) throws Exception {        
         Map<String, Object> responseData = new HashMap<String, Object>();
 
-        String REMOTE_HOST = (String) body.get("remoteHost");
-        String USERNAME = (String) body.get("username");
-        String PASSWORD = (String) body.get("password");
-        String KNOWN_HOSTS_PATH = (String) body.get("knownHostPath");
-        int REMOTE_PORT = (int) body.get("remotePort");
-        int SESSION_TIMEOUT = (int) body.get("sessionTimeout");
-        int CHANNEL_TIMEOUT = (int) body.get("channelTimeout");
-        byte[] FILE_CONTENT = (byte[]) body.get("fileContent");
-
-        String REMOTE_PATH = (String) body.get("remotePath");
-        String FILENAME = (String) body.get("filename");
+        String fileContent = (String) body.get("fileContent");
+        String remotePath = (String) body.get("remotePath");
+        String filename = (String) body.get("filename");
 
         String errorMsg = "";
-        
-        Session jschSession = null;
-
-        try {
-            JSch jsch = new JSch();
-            jsch.setKnownHosts(KNOWN_HOSTS_PATH);
-            jschSession = jsch.getSession(USERNAME, REMOTE_HOST, REMOTE_PORT);
-            jschSession.setPassword(PASSWORD);
-
-            jschSession.connect(SESSION_TIMEOUT);
-            Channel sftp = jschSession.openChannel("sftp");
-            sftp.connect(CHANNEL_TIMEOUT);
-
-            ChannelSftp channelSftp = (ChannelSftp) sftp;
-
+        try {            
             //create source byteArrayInputStream
-            ByteArrayInputStream sourceContent = new ByteArrayInputStream(FILE_CONTENT);
+            //ByteArrayInputStream sourceContent = new ByteArrayInputStream(fileContent);
+            String sourceContent = fileContent;
 
-            // transfer file from local to remote server
-            channelSftp.put(sourceContent, REMOTE_PATH + FILENAME);
-
-            // download file from remote server to local
-            // channelSftp.get(remoteFile, localFile);
-
-            channelSftp.exit();
+            // transfer file from local to remote server, always OVERWRITE mode
+            this._channelSftp.put(sourceContent, remotePath + "/" + filename, ChannelSftp.OVERWRITE);        
             
         } catch (Exception e) {
             errorMsg = e.getMessage();
-            e.printStackTrace();
+            e.printStackTrace();            
         }
         
         if (errorMsg.isEmpty()) {
+            String successMsg = "Completed file upload for file name " + filename + ". Current Connection status: " + this._channelSftp.isConnected();
             responseData.put("status","success");
-            responseData.put("message","email sent successfully");
+            responseData.put("message",successMsg);
+            LOG.info(successMsg);
         } else {
             responseData.put("status","error");
             responseData.put("message",errorMsg);
+            LOG.error(errorMsg);
         }        
         
         return responseData;
     }
+
+    public void stop() {
+        if (this._channelSftp.isConnected()) {
+          this._channelSftp.disconnect();
+          LOG.info("SFTP extension closed with channel exit status:" + this._channelSftp.getExitStatus());
+        } 
+        this.jschSession.disconnect();
+        LOG.info("SFTP extension closed with Session Running Status:" + this.jschSession.isConnected());
+      }
+      
+    public boolean isRunning() {
+    return true;
+    }
+    
+    public void start() {
+    LOG.info("Starting SFTP Extension");
+    }
+
+    private ChannelSftp setupJsch(String remoteHost, String username, String password, String knownHostsPath, int remotePort, int sessionTimeout) throws Exception {
+        this.jsch = new JSch();
+        if (knownHostsPath != null)
+          this.jsch.setKnownHosts(knownHostsPath); 
+        this.jschSession = this.jsch.getSession(username, remoteHost, remotePort);
+        this.jschSession.setPassword(password);
+        // this.jsch.addIdentity(_privatekey);
+        this.jschSession.connect(sessionTimeout);
+        this.jschSession.sendKeepAliveMsg();
+        return (ChannelSftp)this.jschSession.openChannel("sftp");
+      }
 
 }
