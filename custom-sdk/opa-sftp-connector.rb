@@ -75,11 +75,10 @@
   
       execute: ->(connection, input) {
         post("http://localhost/ext/#{connection['profileName']}/uploadFileContent",input).
-        headers('X-Workato-Connector': 'enforce').
-        params(version: "2015-12-15").
+        headers('X-Workato-Connector': 'enforce').        
         request_format_multipart_form.
         payload(
-          file: [input['fileContant'], 'text/plain'],
+          file: [input['fileContent'], 'text/plain'],
           filename: input['filename'],
           remotePath: input['remotePath']
         )

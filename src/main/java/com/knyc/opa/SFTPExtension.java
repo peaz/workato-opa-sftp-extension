@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
-// import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 // import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.context.Lifecycle;
 // import org.springframework.http.HttpStatus;
@@ -20,11 +20,15 @@ import org.slf4j.LoggerFactory;
 
 import com.jcraft.jsch.*;
 
-// import java.io.ByteArrayInputStream;
-// import java.util.Collection;
-import java.util.HashMap;
-// import java.util.HashSet;
+
+import java.io.ByteArrayInputStream;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Base64;
+// import java.util.HashSet;
+// import java.util.Collection;
+
+import javax.management.relation.RelationSupportMBean;
 
 @Controller
 public class SFTPExtension implements Lifecycle{
@@ -47,7 +51,6 @@ public class SFTPExtension implements Lifecycle{
     public Map<String, Object> connect(@RequestBody Map<String, Object> body) throws Exception {
         
         Map<String, Object> responseData = new HashMap<String, Object>();
-
         this._remoteHost = (String) body.get("remoteHost");
         this._username = (String) body.get("username");
         this._password = (String) body.get("password");
@@ -72,8 +75,7 @@ public class SFTPExtension implements Lifecycle{
             responseData.put("status","success");
             responseData.put("message",successMsg);
         } else {            
-            responseData.put("status","error");
-            responseData.put("message",errorMsg);
+            responseData = createErrorMsg(errorMsg);
         }        
         
         return responseData;
@@ -81,13 +83,23 @@ public class SFTPExtension implements Lifecycle{
 
     @RequestMapping(path = "/uploadFileContent", method = (RequestMethod.POST))
     @ResponseBody
-    public Map<String, Object> uploadFileContent(@RequestParam Map<String, Object> body) throws Exception {        
+    public Map<String, Object> uploadFileContent(@RequestBody Map<String, Object> body) throws Exception {        
         
-        String fileContent = (String) body.get("fileContent");
+        Map<String, Object> responseData = new HashMap<String, Object>();
+        String fileContentinBase64 = (String) body.get("fileContent");
         String remotePath = (String) body.get("remotePath");
         String filename = (String) body.get("filename");
 
-        return uploadFiletoSFTP(fileContent, remotePath, filename);
+        byte[] decodedBytes = Base64.getDecoder().decode(fileContentinBase64);
+
+        if (this._channelSftp != null) {
+            responseData = uploadFiletoSFTP(decodedBytes, remotePath, filename);
+        } else {
+            responseData = createErrorMsg("SFTP Extention Connection is not valid. Please check and reconnect the connector.");
+        }
+
+        return responseData;
+        
     }
 
     public void stop() {
@@ -107,6 +119,14 @@ public class SFTPExtension implements Lifecycle{
         LOG.info("Starting SFTP Extension");
     }
 
+    private Map<String, Object> createErrorMsg(String errorMsg){
+        Map<String, Object> responseData = new HashMap<String, Object>();
+        responseData.put("status","error");
+        responseData.put("message",errorMsg);
+        LOG.error(errorMsg);
+        return responseData;
+    }
+
     private ChannelSftp setupJsch(String remoteHost, String username, String password, String knownHostsPath, int remotePort, int sessionTimeout) throws Exception {
         this.jsch = new JSch();
         if (knownHostsPath != null)
@@ -119,17 +139,15 @@ public class SFTPExtension implements Lifecycle{
         return (ChannelSftp)this.jschSession.openChannel("sftp");
       }
 
-      private Map<String, Object> uploadFiletoSFTP(String fileContent, String remotePath, String filename) throws Exception {
+    private Map<String, Object> uploadFiletoSFTP(byte[] fileContent, String remotePath, String filename) throws Exception {
         Map<String, Object> responseData = new HashMap<String, Object>();
-        String errorMsg = "";
+        String errorMsg = "";        
         try {            
             //create source byteArrayInputStream
-            //ByteArrayInputStream sourceContent = new ByteArrayInputStream(fileContent);
-            String sourceContent = fileContent;
+            ByteArrayInputStream sourceContent = new ByteArrayInputStream(fileContent);
 
             // transfer file from local to remote server, always OVERWRITE mode
-            this._channelSftp.put(sourceContent, remotePath + "/" + filename, ChannelSftp.OVERWRITE);
-            
+            this._channelSftp.put(sourceContent, remotePath + "/" + filename, ChannelSftp.OVERWRITE);            
         } catch (Exception e) {
             errorMsg = e.getMessage();
             e.printStackTrace();            
@@ -141,9 +159,7 @@ public class SFTPExtension implements Lifecycle{
             responseData.put("message",successMsg);
             LOG.info(successMsg);
         } else {
-            responseData.put("status","error");
-            responseData.put("message",errorMsg);
-            LOG.error(errorMsg);
+            responseData = createErrorMsg(errorMsg);
         }   
         return responseData;
       }

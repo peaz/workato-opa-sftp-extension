@@ -2,3 +2,4 @@
 .vscode
 build/classes/main/com/knyc/opa
 build/tmp
+.DS_Store
