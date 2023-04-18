@@ -46,7 +46,6 @@
 
   },
   
-
   actions: {
     uploadToSFTP: {
       title: 'Upload local file to SFTP Server',
@@ -68,76 +67,74 @@
          {
           name: 'filename',
           label: 'File name',
-          optional: false
-   
-        },
-        {
-          name: 'overwrite',
-          label: 'Overwrite if file already exists?',
-          control_type: 'checkbox',
-          type: 'boolean',
-          optional: false,
-          sticky: false,
-          hint: 'Please provide format like path /test/out/' 
+          optional: false  
         }
         
       ]},
       output_fields: -> { [{name: 'status', name: 'message' }] },
   
       execute: ->(connection, input) {
-        post("http://localhost/ext/#{connection['profile']}/uploadFileToRemote",input).headers('X-Workato-Connector': 'enforce')
+        post("http://localhost/ext/#{connection['profileName']}/uploadFileContent",input).
+        headers('X-Workato-Connector': 'enforce').
+        params(version: "2015-12-15").
+        request_format_multipart_form.
+        payload(
+          file: input['fileContant'],
+          filename: input['filename'],
+          remotePath: input['remotePath']
+        )
       }
     },
-    downloadFromSFTP: {
-      title: 'Download SFTP remote file to local directory',
-      description: 'Reads SFTP remote file and write to the local directory',
+    # downloadFromSFTP: {
+    #   title: 'Download SFTP remote file to local directory',
+    #   description: 'Reads SFTP remote file and write to the local directory',
 
-      input_fields: ->  {[
+    #   input_fields: ->  {[
     
-       {
-          name: 'remoteFolder',
-          label: 'Remote Folder Path',
-          optional: false,
-          hint: 'Please provide format like path /test/out/' 
+    #    {
+    #       name: 'remoteFolder',
+    #       label: 'Remote Folder Path',
+    #       optional: false,
+    #       hint: 'Please provide format like path /test/out/' 
    
-        },
-          {
-          name: 'fileName',
-          label: 'Remote File Name',
-          optional: false
+    #     },
+    #       {
+    #       name: 'fileName',
+    #       label: 'Remote File Name',
+    #       optional: false
    
-        },
-         {
-          name: 'localFolder',
-          label: 'Local Folder Path',
-          optional: false,
-          hint: 'Please provide format like path /test/in/' 
-        },
-         {
-          name: 'post_read',
-          control_type: 'select',
-          pick_list: 'PostReadOptions',
-          optional: false,
-          label: 'Action required Delete or Archive',
-        },
-        {
-          name: 'moveTo',
-          label: 'Archive Folder',
-          ngIf: 'input.post_read == "archive"',
-          sticky: true,
-          hint: 'Provide the complete archive folder path  like path /test/archive/' 
-        }
+    #     },
+    #      {
+    #       name: 'localFolder',
+    #       label: 'Local Folder Path',
+    #       optional: false,
+    #       hint: 'Please provide format like path /test/in/' 
+    #     },
+    #      {
+    #       name: 'post_read',
+    #       control_type: 'select',
+    #       pick_list: 'PostReadOptions',
+    #       optional: false,
+    #       label: 'Action required Delete or Archive',
+    #     },
+    #     {
+    #       name: 'moveTo',
+    #       label: 'Archive Folder',
+    #       ngIf: 'input.post_read == "archive"',
+    #       sticky: true,
+    #       hint: 'Provide the complete archive folder path  like path /test/archive/' 
+    #     }
         
-      ]},
-      output_fields: -> { [{name: 'status' }] },
+    #   ]},
+    #   output_fields: -> { [{name: 'status' }] },
   
    
 
-      execute: ->(connection, input) {
-        post("http://localhost/ext/#{connection['profile']}/downLoadFileFromRemote",input).headers('X-Workato-Connector': 'enforce')
-      }
-    }
+    #   execute: ->(connection, input) {
+    #     post("http://localhost/ext/#{connection['profileName']}/downloadFileContent",input).headers('X-Workato-Connector': 'enforce')
+    #   }
+    # }
   },
 
 
-}
+} 
