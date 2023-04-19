@@ -4,15 +4,13 @@
 
 package com.knyc.opa;
 
+import org.springframework.context.Lifecycle;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.multipart.MultipartFile;
 // import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.context.Lifecycle;
 // import org.springframework.http.HttpStatus;
 
 import org.slf4j.Logger;
@@ -20,15 +18,10 @@ import org.slf4j.LoggerFactory;
 
 import com.jcraft.jsch.*;
 
-
 import java.io.ByteArrayInputStream;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Base64;
-// import java.util.HashSet;
-// import java.util.Collection;
-
-import javax.management.relation.RelationSupportMBean;
 
 @Controller
 public class SFTPExtension implements Lifecycle{

@@ -1,5 +1,6 @@
 .gradle
 .vscode
-build/classes/main/com/knyc/opa
+build/classes/
 build/tmp
 .DS_Store
+bin/
