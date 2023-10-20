@@ -10,18 +10,22 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
-// import org.springframework.web.bind.annotation.ResponseStatus;
-// import org.springframework.http.HttpStatus;
-
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.jcraft.jsch.*;
 
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Base64;
+import org.apache.commons.io.IOUtils;
 
 @Controller
 public class SFTPExtension implements Lifecycle{
@@ -60,14 +64,14 @@ public class SFTPExtension implements Lifecycle{
         } catch (Exception e) {
             errorMsg = e.getMessage();
             e.printStackTrace();    
-            // throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage(), e);  
-        }
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, errorMsg, e);
+        }        
         
         if (errorMsg.isEmpty()) {
             String successMsg = "successfully connected to remote SFTP host [" + this._remoteHost + ":" + this._remotePort + "]"; 
             responseData.put("status","success");
             responseData.put("message",successMsg);
-        } else {            
+        } else {
             responseData = createErrorMsg(errorMsg);
         }        
         
@@ -81,12 +85,28 @@ public class SFTPExtension implements Lifecycle{
         Map<String, Object> responseData = new HashMap<String, Object>();
         String fileContentinBase64 = (String) body.get("fileContent");
         String remotePath = (String) body.get("remotePath");
-        String filename = (String) body.get("filename");
-
-        byte[] decodedBytes = Base64.getDecoder().decode(fileContentinBase64);
+        String filename = (String) body.get("filename");        
 
         if (this._channelSftp != null) {
-            responseData = uploadFiletoSFTP(decodedBytes, remotePath, filename);
+            responseData = uploadFiletoSFTP(fileContentinBase64, remotePath, filename);
+        } else {
+            responseData = createErrorMsg("SFTP Extention Connection is not valid. Please check and reconnect the connector.");
+        }
+
+        return responseData;
+        
+    }
+
+    @RequestMapping(path = "/downloadFileContent", method = (RequestMethod.POST))
+    @ResponseBody
+    public Map<String, Object> downloadFileContent(@RequestBody Map<String, Object> body) throws Exception {        
+        
+        Map<String, Object> responseData = new HashMap<String, Object>();
+        String remotePath = (String) body.get("remotePath");
+        String filename = (String) body.get("filename");
+
+        if (this._channelSftp != null) {
+            responseData = downloadFilefromSFTP(remotePath, filename);
         } else {
             responseData = createErrorMsg("SFTP Extention Connection is not valid. Please check and reconnect the connector.");
         }
@@ -112,6 +132,13 @@ public class SFTPExtension implements Lifecycle{
         LOG.info("Starting SFTP Extension");
     }
 
+    // //Exception handlers
+    // @ResponseStatus(
+    //     value = HttpStatus.INTERNAL_SERVER_ERROR,
+    //     reason = "Connection"
+    // )
+    // public class ConnectionErrorException {}
+
     private Map<String, Object> createErrorMsg(String errorMsg){
         Map<String, Object> responseData = new HashMap<String, Object>();
         responseData.put("status","error");
@@ -132,15 +159,19 @@ public class SFTPExtension implements Lifecycle{
         return (ChannelSftp)this.jschSession.openChannel("sftp");
       }
 
-    private Map<String, Object> uploadFiletoSFTP(byte[] fileContent, String remotePath, String filename) throws Exception {
+    private Map<String, Object> uploadFiletoSFTP(String fileContentinBase64, String remotePath, String filename) throws Exception {
         Map<String, Object> responseData = new HashMap<String, Object>();
         String errorMsg = "";        
-        try {            
-            //create source byteArrayInputStream
-            ByteArrayInputStream sourceContent = new ByteArrayInputStream(fileContent);
+        try {
+            
+            //convert fileContentinBase64 to byteArray
+            byte[] decodedBytes = Base64.getDecoder().decode(fileContentinBase64);
+            
+            //create fileContent byteArrayInputStream
+            ByteArrayInputStream fileContent = new ByteArrayInputStream(decodedBytes);
 
             // transfer file from local to remote server, always OVERWRITE mode
-            this._channelSftp.put(sourceContent, remotePath + "/" + filename, ChannelSftp.OVERWRITE);            
+            this._channelSftp.put(fileContent, remotePath + "/" + filename, ChannelSftp.OVERWRITE);            
         } catch (Exception e) {
             errorMsg = e.getMessage();
             e.printStackTrace();            
@@ -150,6 +181,41 @@ public class SFTPExtension implements Lifecycle{
             String successMsg = "Completed file upload for file name " + filename + ". Current Connection status: " + this._channelSftp.isConnected();
             responseData.put("status","success");
             responseData.put("message",successMsg);
+            LOG.info(successMsg);
+        } else {
+            responseData = createErrorMsg(errorMsg);
+        }   
+        return responseData;
+      }
+
+      private Map<String, Object> downloadFilefromSFTP(String remotePath, String filename) throws Exception {
+        Map<String, Object> responseData = new HashMap<String, Object>();
+        String errorMsg = "";
+        String fileContentinBase64 = "";
+        byte[] fileContentinByteArray = null;
+        
+        try {            
+            InputStream fileContentStream = null;
+
+            // download file from remote server
+            fileContentStream = this._channelSftp.get(remotePath + "/" + filename);
+
+            //write fileContentStream into byteArray
+            fileContentinByteArray = IOUtils.toByteArray(fileContentStream);
+
+            //convert fileContentinByteArray to Base64
+            fileContentinBase64 = Base64.getEncoder().encodeToString(fileContentinByteArray);
+
+        } catch (Exception e) {
+            errorMsg = e.getMessage();
+            e.printStackTrace();   
+        }
+        
+        if (errorMsg.isEmpty()) {
+            String successMsg = "Completed file download for file name " + filename + ". Current Connection status: " + this._channelSftp.isConnected();
+            responseData.put("status","success");
+            responseData.put("message",successMsg);
+            responseData.put("fileContentinBase64",fileContentinBase64);
             LOG.info(successMsg);
         } else {
             responseData = createErrorMsg(errorMsg);

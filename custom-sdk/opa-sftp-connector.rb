@@ -38,10 +38,8 @@
       channelTimeout: connection['channelTimeout'],
       username: connection['username'],
       password: connection['password'],
-      knownHostPath: connection['knownHostPath'],
-      
-      ).headers('X-Workato-Connector': 'enforce').after_error_response(500) do |code, body, header, message|
-      error("#{code}: #{body}")
+      knownHostPath: connection['knownHostPath'],      
+      ).headers('X-Workato-Connector': 'enforce')
    end
 
   },
@@ -71,69 +69,69 @@
         }
         
       ]},
-      output_fields: -> { [{name: 'status', name: 'message' }] },
+      output_fields: -> {[
+        {name: 'status', type: 'string'},
+        {name: 'message', type: 'string'}
+        ]
+      },
   
       execute: ->(connection, input) {
         post("http://localhost/ext/#{connection['profileName']}/uploadFileContent",input).
-        headers('X-Workato-Connector': 'enforce').        
-        request_format_multipart_form.
-        payload(
-          file: [input['fileContent'], 'text/plain'],
-          filename: input['filename'],
-          remotePath: input['remotePath']
-        )
+        headers('X-Workato-Connector': 'enforce')
+        # headers('X-Workato-Connector': 'enforce').
+        # request_format_multipart_form.
+        # payload(
+        #   file: [input['fileContent'], 'text/plain'],
+        #   filename: input['filename'],
+        #   remotePath: input['remotePath']
+        # )
       }
     },
-    # downloadFromSFTP: {
-    #   title: 'Download SFTP remote file to local directory',
-    #   description: 'Reads SFTP remote file and write to the local directory',
+    downloadFromSFTP: {
+      title: 'Download SFTP remote file',
+      description: 'Reads SFTP remote file and write to the local directory',
 
-    #   input_fields: ->  {[
+      input_fields: ->  {[
     
-    #    {
-    #       name: 'remoteFolder',
-    #       label: 'Remote Folder Path',
-    #       optional: false,
-    #       hint: 'Please provide format like path /test/out/' 
+       {
+          name: 'remoteFolder',
+          label: 'Remote Folder Path',
+          optional: false,
+          hint: 'Please provide format like path /test/out/' 
    
-    #     },
-    #       {
-    #       name: 'fileName',
-    #       label: 'Remote File Name',
-    #       optional: false
+        },
+          {
+          name: 'fileName',
+          label: 'Remote File Name',
+          optional: false
    
-    #     },
-    #      {
-    #       name: 'localFolder',
-    #       label: 'Local Folder Path',
-    #       optional: false,
-    #       hint: 'Please provide format like path /test/in/' 
-    #     },
-    #      {
-    #       name: 'post_read',
-    #       control_type: 'select',
-    #       pick_list: 'PostReadOptions',
-    #       optional: false,
-    #       label: 'Action required Delete or Archive',
-    #     },
-    #     {
-    #       name: 'moveTo',
-    #       label: 'Archive Folder',
-    #       ngIf: 'input.post_read == "archive"',
-    #       sticky: true,
-    #       hint: 'Provide the complete archive folder path  like path /test/archive/' 
-    #     }
-        
-    #   ]},
-    #   output_fields: -> { [{name: 'status' }] },
+        }
+        #  {
+        #   name: 'post_read',
+        #   control_type: 'select',
+        #   pick_list: 'PostReadOptions',
+        #   optional: false,
+        #   label: 'Action required Delete or Archive',
+        # },
+        # {
+        #   name: 'moveTo',
+        #   label: 'Archive Folder',
+        #   ngIf: 'input.post_read == "archive"',
+        #   sticky: true,
+        #   hint: 'Provide the complete archive folder path  like path /test/archive/' 
+        # }        
+      ]},
+      output_fields: -> {[
+        {name: 'status', type: 'string'},
+        {name: 'message', type: 'string'},
+        {name: 'fileContentinBase64', type: 'string', optional: true}
+        ]
+      },
   
-   
-
-    #   execute: ->(connection, input) {
-    #     post("http://localhost/ext/#{connection['profileName']}/downloadFileContent",input).headers('X-Workato-Connector': 'enforce')
-    #   }
-    # }
-  },
-
-
+      execute: ->(connection, input) {
+        post("http://localhost/ext/#{connection['profileName']}/downloadFileContent",input)
+        .headers('X-Workato-Connector': 'enforce')
+      }
+    }
+  }
 } 
