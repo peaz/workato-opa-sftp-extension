@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import org.slf4j.Logger;
@@ -20,11 +19,10 @@ import com.jcraft.jsch.*;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Base64;
+
 import org.apache.commons.io.IOUtils;
 
 @Controller
@@ -39,6 +37,10 @@ public class SFTPExtension implements Lifecycle{
     private int _remotePort;
     private int _sessionTimeout;
     private int _channelTimeout;
+
+    private static String INVALID_CONNECTION_ERROR_MSG = "SFTP Extention Connection is not valid. Please check and reconnect the connector.";
+    private static String INVALID_ARCHIVE_DIRECTORY = "Invalid archive directory defined. Please check the connector configurations and make sure the archive directory exists.";
+    private static String INVALID_DIRECTORY = "Invalid directory defined. Please check the connector configurations and make sure the directory exists.";
 
     private JSch jsch;    
     private Session jschSession;
@@ -82,15 +84,18 @@ public class SFTPExtension implements Lifecycle{
     @ResponseBody
     public Map<String, Object> uploadFileContent(@RequestBody Map<String, Object> body) throws Exception {        
         
+        if (!isValidDirectory((String) body.get("fileDirectory"))){
+            throw new ResponseStatusException(HttpStatus.NOT_ACCEPTABLE, INVALID_DIRECTORY); 
+        }
+
         Map<String, Object> responseData = new HashMap<String, Object>();
         String fileContentinBase64 = (String) body.get("fileContent");
-        String remotePath = (String) body.get("remotePath");
-        String filename = (String) body.get("filename");        
+        String fullFilePath = (String) body.get("fileDirectory") + (String) body.get("fileName");
 
         if (this._channelSftp != null) {
-            responseData = uploadFiletoSFTP(fileContentinBase64, remotePath, filename);
+            responseData = uploadFiletoSFTP(fileContentinBase64, fullFilePath);
         } else {
-            responseData = createErrorMsg("SFTP Extention Connection is not valid. Please check and reconnect the connector.");
+            responseData = createErrorMsg(INVALID_CONNECTION_ERROR_MSG);
         }
 
         return responseData;
@@ -101,17 +106,69 @@ public class SFTPExtension implements Lifecycle{
     @ResponseBody
     public Map<String, Object> downloadFileContent(@RequestBody Map<String, Object> body) throws Exception {        
         
-        Map<String, Object> responseData = new HashMap<String, Object>();
-        String fullFilePath = (String) body.get("fullFilePath");        
-
-        if (this._channelSftp != null) {
-            responseData = downloadFilefromSFTP(fullFilePath);
-        } else {
-            responseData = createErrorMsg("SFTP Extention Connection is not valid. Please check and reconnect the connector.");
+        if (!isValidDirectory((String) body.get("fileDirectory"))){
+            throw new ResponseStatusException(HttpStatus.NOT_ACCEPTABLE, INVALID_DIRECTORY); 
         }
 
-        return responseData;
+        Map<String, Object> downloadResponseData = new HashMap<String, Object>();
+        Map<String, Object> postReadResponseData = new HashMap<String, Object>();
+        String fullFilePath = (String) body.get("fileDirectory") + (String) body.get("fileName");
+        String postRead = (String) body.get("postRead");        
+        String archiveFilePath = (String) body.get("archiveDirectory") + (String) body.get("fileName");
+
+        LOG.info("downloadFileContent executed. postRead:" + postRead + " | fullFilePath:" + fullFilePath + " | archiveFilePath:" + archiveFilePath);
+
+        if (this._channelSftp != null) {            
+            downloadResponseData = downloadFilefromSFTP(fullFilePath);
+        } else {
+            downloadResponseData = createErrorMsg(INVALID_CONNECTION_ERROR_MSG);
+        }
+
+        if (postRead.equals("archive")){
+            if (!isValidDirectory((String) body.get("archiveDirectory"))){
+                throw new ResponseStatusException(HttpStatus.NOT_ACCEPTABLE, INVALID_ARCHIVE_DIRECTORY); 
+            }
+            postReadResponseData = renameFileAtSFTP(fullFilePath, archiveFilePath);
+            if (postReadResponseData.get("status") == "success") {
+                downloadResponseData.put("achiveFilePath", archiveFilePath);
+            }
+            else {
+                downloadResponseData = postReadResponseData;
+            }
+        } else if (postRead.equals("delete")) {            
+            postReadResponseData = removeFileAtSFTP(fullFilePath);
+            if (postReadResponseData.get("status") == "success") {
+                downloadResponseData.put("isDeleted", true);
+            }
+            else {
+                downloadResponseData = postReadResponseData;
+            }
+        } else {
+            //defaults to renaming to .archive if invalid operation.
+            postReadResponseData = renameFileAtSFTP(fullFilePath, fullFilePath + ".archive");
+            if (postReadResponseData.get("status") == "success") {
+                downloadResponseData.put("achiveFilePath", fullFilePath + ".archive");
+            }
+            else {
+                downloadResponseData = postReadResponseData;
+            }            
+        }
+        return downloadResponseData;        
+    }
+
+    @RequestMapping(path = "/getFileAttrs", method = (RequestMethod.POST), produces = "application/json")
+    @ResponseBody
+    public Map<String, Object> getFileAttrs(@RequestBody Map<String, Object> body) throws Exception {        
         
+        Map<String, Object> responseData = new HashMap<String, Object>();
+        String fullPath = (String) body.get("fullPath");        
+
+        if (this._channelSftp != null) {            
+            responseData = getFileAttrsfromSFTP(fullPath);
+        } else {
+            responseData = createErrorMsg(INVALID_CONNECTION_ERROR_MSG);
+        }
+        return responseData;
     }
 
     public void stop() {
@@ -151,7 +208,7 @@ public class SFTPExtension implements Lifecycle{
         return (ChannelSftp)this.jschSession.openChannel("sftp");
       }
 
-    private Map<String, Object> uploadFiletoSFTP(String fileContentinBase64, String remotePath, String filename) throws Exception {
+    private Map<String, Object> uploadFiletoSFTP(String fileContentinBase64, String fullFilePath) throws Exception {
         Map<String, Object> responseData = new HashMap<String, Object>();
         String errorMsg = "";        
         try {
@@ -163,14 +220,14 @@ public class SFTPExtension implements Lifecycle{
             ByteArrayInputStream fileContent = new ByteArrayInputStream(decodedBytes);
 
             // transfer file from local to remote server, always OVERWRITE mode
-            this._channelSftp.put(fileContent, remotePath + "/" + filename, ChannelSftp.OVERWRITE);            
+            this._channelSftp.put(fileContent, fullFilePath, ChannelSftp.OVERWRITE);            
         } catch (Exception e) {
             errorMsg = e.getMessage();
             e.printStackTrace();            
         }
         
         if (errorMsg.isEmpty()) {
-            String successMsg = "Completed file upload for file name " + filename + ". Current Connection status: " + this._channelSftp.isConnected();
+            String successMsg = "Completed file upload for file " + fullFilePath;
             responseData.put("status","success");
             responseData.put("message",successMsg);
             LOG.info(successMsg);
@@ -180,7 +237,7 @@ public class SFTPExtension implements Lifecycle{
         return responseData;
       }
 
-      private Map<String, Object> downloadFilefromSFTP(String fullFilePath) throws Exception {
+    private Map<String, Object> downloadFilefromSFTP(String fullFilePath) throws Exception {
         Map<String, Object> responseData = new HashMap<String, Object>();
         String errorMsg = "";
         String fileContentinBase64 = "";
@@ -204,7 +261,7 @@ public class SFTPExtension implements Lifecycle{
         }
         
         if (errorMsg.isEmpty()) {
-            String successMsg = "Completed file download for " + fullFilePath + ". Current Connection status: " + this._channelSftp.isConnected();
+            String successMsg = "Completed file download for " + fullFilePath;
             responseData.put("status","success");
             responseData.put("message",successMsg);
             responseData.put("fileContentinBase64",fileContentinBase64);
@@ -215,4 +272,92 @@ public class SFTPExtension implements Lifecycle{
         return responseData;
       }
 
+    private boolean isValidDirectory(String directoryPath) throws Exception {
+        try {    
+            // use lstat to check if path is a directory
+            SftpATTRS fileAttrs = this._channelSftp.lstat(directoryPath);            
+            return fileAttrs.isDir();
+        }
+        catch (Exception e) {
+            // if errored out, then it's definitely invalid
+            return false;
+        }
+    }
+    
+    private Map<String, Object> getFileAttrsfromSFTP(String fullPath) throws Exception {
+        Map<String, Object> responseData = new HashMap<String, Object>();
+        String errorMsg = "";
+        long sizeInBytes = 0;
+        int modifiedTimestamp = 0;
+        boolean isDir = false;
+        
+        try {            
+            // get file size from remote server
+            SftpATTRS pathAttrs = this._channelSftp.lstat(fullPath);
+            sizeInBytes = pathAttrs.getSize();
+            modifiedTimestamp = pathAttrs.getMTime();
+            isDir = pathAttrs.isDir();
+            
+        } catch (Exception e) {
+            errorMsg = e.getMessage();
+            e.printStackTrace();
+        }
+        
+        if (errorMsg.isEmpty()) {
+            responseData.put("status","success");
+            responseData.put("sizeInBytes",sizeInBytes);
+            responseData.put("modifiedTimestamp",modifiedTimestamp);
+            responseData.put("isDir",isDir);
+            String successMsg = "Returned path attributes for " + fullPath;
+            LOG.info(successMsg);
+        } else {
+            responseData = createErrorMsg(errorMsg);
+        }   
+        return responseData;
+    }
+
+    private Map<String, Object> renameFileAtSFTP(String oldFilePath, String newFilePath) throws Exception {
+        Map<String, Object> responseData = new HashMap<String, Object>();
+        String errorMsg = "";
+        
+        try {            
+            this._channelSftp.rename(oldFilePath,newFilePath);
+            
+        } catch (Exception e) {
+            errorMsg = e.getMessage();
+            e.printStackTrace();
+        }
+        
+        if (errorMsg.isEmpty()) {
+            String successMsg = "Renamed file from " + oldFilePath + " to " + newFilePath;
+            responseData.put("status","success");
+            responseData.put("newFilePath",newFilePath);
+            LOG.info(successMsg);
+        } else {
+            responseData = createErrorMsg(errorMsg);
+        }   
+        return responseData;
+    }
+
+    private Map<String, Object> removeFileAtSFTP(String fullFilePath) throws Exception {
+        Map<String, Object> responseData = new HashMap<String, Object>();
+        String errorMsg = "";
+        
+        try {            
+            this._channelSftp.rm(fullFilePath);
+            
+        } catch (Exception e) {
+            errorMsg = e.getMessage();
+            e.printStackTrace();
+        }
+        
+        if (errorMsg.isEmpty()) {
+            String successMsg = "Removed file " + fullFilePath;
+            responseData.put("status","success");
+            LOG.info(successMsg);
+        } else {
+            responseData = createErrorMsg(errorMsg);
+        }   
+        return responseData;
+    }
 }

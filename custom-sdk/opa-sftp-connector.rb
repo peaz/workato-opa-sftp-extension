@@ -43,6 +43,41 @@
   },
   
   actions: {
+    getFileAttrs: {
+      title: 'Get file or directory attributes',
+      description: 'Get size, modified time and isDir flag',
+
+      input_fields: ->  {[
+       {
+          name: 'fullPath',
+          label: 'Full path to download',
+          optional: false,
+          hint: 'Please provide format like /test/download/sample.txt'    
+        }
+      ]},      
+      execute: ->(connection, input) {
+        post("http://localhost/ext/#{connection['profileName']}/getFileAttrs",input)
+        .headers('X-Workato-Connector': 'enforce')
+        .after_response do |code, body, header|
+          if body["status"] == "error"
+            error("error: #{body["message"]}")
+          else
+            result = {
+              "status": body["status"],
+              "isDir": body["status"],
+              "sizeInBytes": body["sizeInBytes"],
+              "modifiedTimestamp": Time.at(body["modifiedTimestamp"])
+            }
+          end
+        end
+      },
+      output_fields: -> {[
+        {name: 'status', type: 'string'},
+        {name: 'isDir', type: 'boolean'},
+        {name: 'sizeInBytes', type: 'number'},
+        {name: 'modifiedTimestamp', type: 'timestamp'}
+      ]}
+    },
     uploadToSFTP: {
       title: 'Upload file',
       description: 'Uploads a file to an SFTP server',
@@ -50,79 +85,91 @@
       input_fields: ->  {[
         {
           name: 'fileContent',
-          label: 'File Content',
+          label: 'File content to be uploaded',
           optional: false,
-          hint: 'File content' 
+          hint: 'The content of the file to be uploaded. Note that file content will be auto-converted to Base64 if file content is not in plaintext',
         },
-       {
-          name: 'remotePath',
-          label: 'Remote Folder Path',
-          optional: false
-   
+        {
+          name: 'fileDirectory',
+          label: 'Full directory path of file to download',
+          optional: false,
+          hint: 'Please provide full directory path. Example "/test/download/"'
         },
-         {
-          name: 'filename',
-          label: 'File name',
-          optional: false  
+        {
+          name: 'fileName',
+          label: 'File name to download',
+          optional: false,
+          hint: 'Please provide name of the file to download. Example "file.txt"'
         }
         
       ]},
+      execute: ->(connection, input) {
+        post("http://localhost/ext/#{connection['profileName']}/uploadFileContent",input)
+        .headers('X-Workato-Connector': 'enforce')
+        .after_response do |code, body, header|
+          if body["status"] == "error"
+            error("error: #{body["message"]}")
+          else
+            body
+          end
+        end
+      },
       output_fields: -> {[
         {name: 'status', type: 'string'},
         {name: 'message', type: 'string'}
-        ]
-      },
-  
-      execute: ->(connection, input) {
-        post("http://localhost/ext/#{connection['profileName']}/uploadFileContent",input).
-        headers('X-Workato-Connector': 'enforce')
-        # headers('X-Workato-Connector': 'enforce').
-        # request_format_multipart_form.
-        # payload(
-        #   file: [input['fileContent'], 'text/plain'],
-        #   filename: input['filename'],
-        #   remotePath: input['remotePath']
-        # )
-      }
+      ]}
     },
     downloadFromSFTP: {
       title: 'Download file',
       description: 'Downlods a remote file from an SFTP server',
 
-      input_fields: ->  {[
-    
-       {
-          name: 'fullFilePath',
-          label: 'Full File path to download',
+      input_fields: ->  {[    
+        {
+          name: 'fileDirectory',
+          label: 'Full directory path of file to download',
           optional: false,
-          hint: 'Please provide format like /test/download/sample.txt'    
-        }
-        #  {
-        #   name: 'post_read',
-        #   control_type: 'select',
-        #   pick_list: 'PostReadOptions',
-        #   optional: false,
-        #   label: 'Action required Delete or Archive',
-        # },
-        # {
-        #   name: 'moveTo',
-        #   label: 'Archive Folder',
-        #   ngIf: 'input.post_read == "archive"',
-        #   sticky: true,
-        #   hint: 'Provide the complete archive folder path  like path /test/archive/' 
-        # }        
-      ]},
-      output_fields: -> {[
-        {name: 'status', type: 'string'},
-        {name: 'message', type: 'string'},
-        {name: 'fileContentinBase64', type: 'string', optional: true}
-        ]
-      },
-  
+          hint: 'Please provide full directory path. Example "/test/download/"'    
+        },
+        {
+          name: 'fileName',
+          label: 'File name to download',
+          optional: false,
+          hint: 'Please provide name of the file to download. Example "file.txt"'    
+        },
+        {
+          name: 'postRead',
+          control_type: 'select',
+          pick_list: 'PostReadOptions',
+          optional: false,
+          label: 'Post read action to delete or archive',
+        },
+        {
+          name: 'archiveDirectory',
+          label: 'Archive Directory',
+          ngIf: 'input.postRead == "archive"',
+          sticky: true,
+          hint: 'Provide the full archive directory path. Example "/test/archive/"' 
+        }        
+      ]},      
       execute: ->(connection, input) {
         post("http://localhost/ext/#{connection['profileName']}/downloadFileContent",input)
         .headers('X-Workato-Connector': 'enforce')
+        .after_response do |code, body, header|
+          if body["status"] == "error"
+            error("error: #{body["message"]}")
+          else
+            body["fileContent"] = body["fileContentinBase64"].decode_base64
+            body
+          end          
+        end
+      },
+      output_fields: -> {[
+        {name: 'status', type: 'string'},
+        {name: 'message', type: 'string'},
+        {name: 'fileContentInBase64', label: 'File Content (base64 encoded)', type: 'string', optional: true},
+        {name: 'fileContent', type: 'string'}
+        ]
       }
-    }
+    }  
   }
 } 
