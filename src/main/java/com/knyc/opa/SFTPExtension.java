@@ -43,7 +43,7 @@ public class SFTPExtension implements Lifecycle{
     private JSch jsch;    
     private Session jschSession;
 
-    @RequestMapping(path = "/connect", method = RequestMethod.POST)
+    @RequestMapping(path = "/connect", method = RequestMethod.POST, produces = "application/json")
     @ResponseBody
     public Map<String, Object> connect(@RequestBody Map<String, Object> body) throws Exception {
         
@@ -78,7 +78,7 @@ public class SFTPExtension implements Lifecycle{
         return responseData;
     }
 
-    @RequestMapping(path = "/uploadFileContent", method = (RequestMethod.POST))
+    @RequestMapping(path = "/uploadFileContent", method = (RequestMethod.POST), produces = "application/json")
     @ResponseBody
     public Map<String, Object> uploadFileContent(@RequestBody Map<String, Object> body) throws Exception {        
         
@@ -97,7 +97,7 @@ public class SFTPExtension implements Lifecycle{
         
     }
 
-    @RequestMapping(path = "/downloadFileContent", method = (RequestMethod.POST))
+    @RequestMapping(path = "/downloadFileContent", method = (RequestMethod.POST), produces = "application/json")
     @ResponseBody
     public Map<String, Object> downloadFileContent(@RequestBody Map<String, Object> body) throws Exception {        
         
@@ -130,13 +130,6 @@ public class SFTPExtension implements Lifecycle{
     public void start() {
         LOG.info("Starting SFTP Extension");
     }
-
-    // //Exception handlers
-    // @ResponseStatus(
-    //     value = HttpStatus.INTERNAL_SERVER_ERROR,
-    //     reason = "Connection"
-    // )
-    // public class ConnectionErrorException {}
 
     private Map<String, Object> createErrorMsg(String errorMsg){
         Map<String, Object> responseData = new HashMap<String, Object>();
@@ -207,7 +200,7 @@ public class SFTPExtension implements Lifecycle{
 
         } catch (Exception e) {
             errorMsg = e.getMessage();
-            e.printStackTrace();   
+            e.printStackTrace();
         }
         
         if (errorMsg.isEmpty()) {
