@@ -87,23 +87,24 @@
           name: 'fileContent',
           label: 'File content to be uploaded',
           optional: false,
-          hint: 'The content of the file to be uploaded. Note that file content will be auto-converted to Base64 if file content is not in plaintext',
+          hint: 'The content of the file to be uploaded. Note that file content will be auto-converted to Base64 to send to OPA extension.',
         },
         {
           name: 'fileDirectory',
-          label: 'Full directory path of file to download',
+          label: 'Full directory path of file to upload',
           optional: false,
-          hint: 'Please provide full directory path. Example "/test/download/"'
+          hint: 'Please provide full directory path. Example "/test/upload/"'
         },
         {
           name: 'fileName',
-          label: 'File name to download',
+          label: 'File name to create for the upload',
           optional: false,
-          hint: 'Please provide name of the file to download. Example "file.txt"'
+          hint: 'Please provide name of the file to be created. Example "newfile.txt"'
         }
         
       ]},
       execute: ->(connection, input) {
+        input['fileContent'] = input['fileContent'].encode_base64
         post("http://localhost/ext/#{connection['profileName']}/uploadFileContent",input)
         .headers('X-Workato-Connector': 'enforce')
         .after_response do |code, body, header|
@@ -159,6 +160,7 @@
             error("error: #{body["message"]}")
           else
             body["fileContent"] = body["fileContentinBase64"].decode_base64
+            body.delete("fileContentinBase64")
             body
           end          
         end
@@ -166,8 +168,7 @@
       output_fields: -> {[
         {name: 'status', type: 'string'},
         {name: 'message', type: 'string'},
-        {name: 'fileContentInBase64', label: 'File Content (base64 encoded)', type: 'string', optional: true},
-        {name: 'fileContent', type: 'string'}
+        {name: 'fileContent'}
         ]
       }
     }  
