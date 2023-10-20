@@ -38,102 +38,139 @@
       channelTimeout: connection['channelTimeout'],
       username: connection['username'],
       password: connection['password'],
-      knownHostPath: connection['knownHostPath'],
-      
-      ).headers('X-Workato-Connector': 'enforce').after_error_response(500) do |code, body, header, message|
-      error("#{code}: #{body}")
-   end
-
+      knownHostPath: connection['knownHostPath'],      
+      ).headers('X-Workato-Connector': 'enforce')
   },
   
   actions: {
+    getFileAttrs: {
+      title: 'Get file or directory attributes',
+      description: 'Get size, modified time and isDir flag',
+
+      input_fields: ->  {[
+       {
+          name: 'fullPath',
+          label: 'Full path to download',
+          optional: false,
+          hint: 'Please provide format like /test/download/sample.txt'    
+        }
+      ]},      
+      execute: ->(connection, input) {
+        post("http://localhost/ext/#{connection['profileName']}/getFileAttrs",input)
+        .headers('X-Workato-Connector': 'enforce')
+        .after_response do |code, body, header|
+          if body["status"] == "error"
+            error("error: #{body["message"]}")
+          else
+            result = {
+              "status": body["status"],
+              "isDir": body["status"],
+              "sizeInBytes": body["sizeInBytes"],
+              "modifiedTimestamp": Time.at(body["modifiedTimestamp"])
+            }
+          end
+        end
+      },
+      output_fields: -> {[
+        {name: 'status', type: 'string'},
+        {name: 'isDir', type: 'boolean'},
+        {name: 'sizeInBytes', type: 'number'},
+        {name: 'modifiedTimestamp', type: 'timestamp'}
+      ]}
+    },
     uploadToSFTP: {
-      title: 'Upload local file to SFTP Server',
-      description: 'Reads OPA local file and sends to SFTP remote directory',
+      title: 'Upload file',
+      description: 'Uploads a file to an SFTP server',
 
       input_fields: ->  {[
         {
           name: 'fileContent',
-          label: 'File Content',
+          label: 'File content to be uploaded',
           optional: false,
-          hint: 'File content' 
+          hint: 'The content of the file to be uploaded. Note that file content will be auto-converted to Base64 to send to OPA extension.',
         },
-       {
-          name: 'remotePath',
-          label: 'Remote Folder Path',
-          optional: false
-   
+        {
+          name: 'fileDirectory',
+          label: 'Full directory path of file to upload',
+          optional: false,
+          hint: 'Please provide full directory path. Example "/test/upload/"'
         },
-         {
-          name: 'filename',
-          label: 'File name',
-          optional: false  
+        {
+          name: 'fileName',
+          label: 'File name to create for the upload',
+          optional: false,
+          hint: 'Please provide name of the file to be created. Example "newfile.txt"'
         }
         
       ]},
-      output_fields: -> { [{name: 'status', name: 'message' }] },
-  
       execute: ->(connection, input) {
-        post("http://localhost/ext/#{connection['profileName']}/uploadFileContent",input).
-        headers('X-Workato-Connector': 'enforce').        
-        request_format_multipart_form.
-        payload(
-          file: [input['fileContent'], 'text/plain'],
-          filename: input['filename'],
-          remotePath: input['remotePath']
-        )
-      }
+        input['fileContent'] = input['fileContent'].encode_base64
+        post("http://localhost/ext/#{connection['profileName']}/uploadFileContent",input)
+        .headers('X-Workato-Connector': 'enforce')
+        .after_response do |code, body, header|
+          if body["status"] == "error"
+            error("error: #{body["message"]}")
+          else
+            body
+          end
+        end
+      },
+      output_fields: -> {[
+        {name: 'status', type: 'string'},
+        {name: 'message', type: 'string'}
+      ]}
     },
-    # downloadFromSFTP: {
-    #   title: 'Download SFTP remote file to local directory',
-    #   description: 'Reads SFTP remote file and write to the local directory',
+    downloadFromSFTP: {
+      title: 'Download file',
+      description: 'Downlods a remote file from an SFTP server',
 
-    #   input_fields: ->  {[
-    
-    #    {
-    #       name: 'remoteFolder',
-    #       label: 'Remote Folder Path',
-    #       optional: false,
-    #       hint: 'Please provide format like path /test/out/' 
-   
-    #     },
-    #       {
-    #       name: 'fileName',
-    #       label: 'Remote File Name',
-    #       optional: false
-   
-    #     },
-    #      {
-    #       name: 'localFolder',
-    #       label: 'Local Folder Path',
-    #       optional: false,
-    #       hint: 'Please provide format like path /test/in/' 
-    #     },
-    #      {
-    #       name: 'post_read',
-    #       control_type: 'select',
-    #       pick_list: 'PostReadOptions',
-    #       optional: false,
-    #       label: 'Action required Delete or Archive',
-    #     },
-    #     {
-    #       name: 'moveTo',
-    #       label: 'Archive Folder',
-    #       ngIf: 'input.post_read == "archive"',
-    #       sticky: true,
-    #       hint: 'Provide the complete archive folder path  like path /test/archive/' 
-    #     }
-        
-    #   ]},
-    #   output_fields: -> { [{name: 'status' }] },
-  
-   
-
-    #   execute: ->(connection, input) {
-    #     post("http://localhost/ext/#{connection['profileName']}/downloadFileContent",input).headers('X-Workato-Connector': 'enforce')
-    #   }
-    # }
-  },
-
-
+      input_fields: ->  {[    
+        {
+          name: 'fileDirectory',
+          label: 'Full directory path of file to download',
+          optional: false,
+          hint: 'Please provide full directory path. Example "/test/download/"'    
+        },
+        {
+          name: 'fileName',
+          label: 'File name to download',
+          optional: false,
+          hint: 'Please provide name of the file to download. Example "file.txt"'    
+        },
+        {
+          name: 'postRead',
+          control_type: 'select',
+          pick_list: 'PostReadOptions',
+          optional: false,
+          label: 'Post read action to delete or archive',
+        },
+        {
+          name: 'archiveDirectory',
+          label: 'Archive Directory',
+          ngIf: 'input.postRead == "archive"',
+          sticky: true,
+          hint: 'Provide the full archive directory path. Example "/test/archive/"' 
+        }        
+      ]},      
+      execute: ->(connection, input) {
+        post("http://localhost/ext/#{connection['profileName']}/downloadFileContent",input)
+        .headers('X-Workato-Connector': 'enforce')
+        .after_response do |code, body, header|
+          if body["status"] == "error"
+            error("error: #{body["message"]}")
+          else
+            body["fileContent"] = body["fileContentinBase64"].decode_base64
+            body.delete("fileContentinBase64")
+            body
+          end          
+        end
+      },
+      output_fields: -> {[
+        {name: 'status', type: 'string'},
+        {name: 'message', type: 'string'},
+        {name: 'fileContent'}
+        ]
+      }
+    }  
+  }
 } 

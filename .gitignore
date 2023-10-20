@@ -1,6 +1,7 @@
 .gradle
 .vscode
-build/classes/
-build/tmp
 .DS_Store
-bin/
+build/classes
+build/tmp
+build/generated
+bin
