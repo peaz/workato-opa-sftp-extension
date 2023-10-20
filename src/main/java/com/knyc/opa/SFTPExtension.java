@@ -102,11 +102,10 @@ public class SFTPExtension implements Lifecycle{
     public Map<String, Object> downloadFileContent(@RequestBody Map<String, Object> body) throws Exception {        
         
         Map<String, Object> responseData = new HashMap<String, Object>();
-        String remotePath = (String) body.get("remotePath");
-        String filename = (String) body.get("filename");
+        String fullFilePath = (String) body.get("fullFilePath");        
 
         if (this._channelSftp != null) {
-            responseData = downloadFilefromSFTP(remotePath, filename);
+            responseData = downloadFilefromSFTP(fullFilePath);
         } else {
             responseData = createErrorMsg("SFTP Extention Connection is not valid. Please check and reconnect the connector.");
         }
@@ -188,7 +187,7 @@ public class SFTPExtension implements Lifecycle{
         return responseData;
       }
 
-      private Map<String, Object> downloadFilefromSFTP(String remotePath, String filename) throws Exception {
+      private Map<String, Object> downloadFilefromSFTP(String fullFilePath) throws Exception {
         Map<String, Object> responseData = new HashMap<String, Object>();
         String errorMsg = "";
         String fileContentinBase64 = "";
@@ -198,7 +197,7 @@ public class SFTPExtension implements Lifecycle{
             InputStream fileContentStream = null;
 
             // download file from remote server
-            fileContentStream = this._channelSftp.get(remotePath + "/" + filename);
+            fileContentStream = this._channelSftp.get(fullFilePath);
 
             //write fileContentStream into byteArray
             fileContentinByteArray = IOUtils.toByteArray(fileContentStream);
@@ -212,7 +211,7 @@ public class SFTPExtension implements Lifecycle{
         }
         
         if (errorMsg.isEmpty()) {
-            String successMsg = "Completed file download for file name " + filename + ". Current Connection status: " + this._channelSftp.isConnected();
+            String successMsg = "Completed file download for " + fullFilePath + ". Current Connection status: " + this._channelSftp.isConnected();
             responseData.put("status","success");
             responseData.put("message",successMsg);
             responseData.put("fileContentinBase64",fileContentinBase64);

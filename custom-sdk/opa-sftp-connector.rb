@@ -40,14 +40,12 @@
       password: connection['password'],
       knownHostPath: connection['knownHostPath'],      
       ).headers('X-Workato-Connector': 'enforce')
-   end
-
   },
   
   actions: {
     uploadToSFTP: {
-      title: 'Upload local file to SFTP Server',
-      description: 'Reads OPA local file and sends to SFTP remote directory',
+      title: 'Upload file',
+      description: 'Uploads a file to an SFTP server',
 
       input_fields: ->  {[
         {
@@ -88,23 +86,16 @@
       }
     },
     downloadFromSFTP: {
-      title: 'Download SFTP remote file',
-      description: 'Reads SFTP remote file and write to the local directory',
+      title: 'Download file',
+      description: 'Downlods a remote file from an SFTP server',
 
       input_fields: ->  {[
     
        {
-          name: 'remoteFolder',
-          label: 'Remote Folder Path',
+          name: 'fullFilePath',
+          label: 'Full File path to download',
           optional: false,
-          hint: 'Please provide format like path /test/out/' 
-   
-        },
-          {
-          name: 'fileName',
-          label: 'Remote File Name',
-          optional: false
-   
+          hint: 'Please provide format like /test/download/sample.txt'    
         }
         #  {
         #   name: 'post_read',
