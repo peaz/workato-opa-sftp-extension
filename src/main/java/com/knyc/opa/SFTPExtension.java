@@ -116,7 +116,7 @@ public class SFTPExtension implements Lifecycle{
         String postRead = (String) body.get("postRead");        
         String archiveFilePath = (String) body.get("archiveDirectory") + (String) body.get("fileName");
 
-        LOG.info("downloadFileContent executed. postRead:" + postRead + " | fullFilePath:" + fullFilePath + " | archiveFilePath:" + archiveFilePath);
+        //LOG.info("downloadFileContent executed. postRead:" + postRead + " | fullFilePath:" + fullFilePath + " | archiveFilePath:" + archiveFilePath);
 
         if (this._channelSftp != null) {            
             downloadResponseData = downloadFilefromSFTP(fullFilePath);
